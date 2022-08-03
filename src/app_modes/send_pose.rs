@@ -2,6 +2,7 @@
 
 use crate::app_modes::viewport::{UseViewport, Viewport};
 use crate::app_modes::{input, AppMode, BaseMode};
+use crate::config::TermvizConfig;
 use crate::footprint::get_current_footprint;
 use crate::transformation;
 use approx::AbsDiffEq;
@@ -72,6 +73,10 @@ impl SendPose {
             self.ghost_active = false;
         }
     }
+    fn _reset(&mut self) {
+        self.ghost_active = false;
+        self.run(); // Update the robot pose
+    }
 }
 
 impl<B: Backend> BaseMode<B> for SendPose {}
@@ -94,9 +99,8 @@ impl AppMode for SendPose {
             self.new_pose = self.robot_pose.clone();
         }
     }
-    fn reset(&mut self) {
-        self.ghost_active = false;
-        self.run(); // Update the robot pose
+    fn reset(&mut self, new_config: TermvizConfig) {
+        self._reset()
     }
     fn handle_input(&mut self, input: &String) {
         self.viewport.borrow_mut().handle_input(input);
@@ -109,7 +113,7 @@ impl AppMode for SendPose {
             input::ROTATE_RIGHT => self.move_new_pose(0.0, 0.0, -self.increment),
             input::INCREMENT_STEP => self.increment += 0.1,
             input::DECREMENT_STEP => self.increment -= 0.1,
-            input::CANCEL => self.reset(),
+            input::CANCEL => self._reset(),
             input::CONFIRM => self.send_new_pose(),
             _ => (),
         }

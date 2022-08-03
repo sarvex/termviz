@@ -20,17 +20,18 @@ use tui::style::{Color, Modifier, Style};
 use tui::text::{Span, Spans};
 use tui::widgets::{Block, Borders, Paragraph, Row, Table, Wrap};
 use tui::{Frame, Terminal};
-use rosrust;
 
 pub struct App<B: Backend> {
     mode: usize,
     show_help: bool,
     keymap: HashMap<String, String>,
     app_modes: Vec<Box<dyn app_modes::BaseMode<B>>>,
+    current_config: TermvizConfig,
 }
 
 impl<B: Backend> App<B> {
-    pub fn new(tf_listener: Arc<rustros_tf::TfListener>, config: TermvizConfig) -> App<B> {
+    pub fn new(tf_listener: Arc<rustros_tf::TfListener>, x_config: TermvizConfig) -> App<B> {
+        let config = x_config.clone();
         let listeners = Listeners::new(
             tf_listener.clone(),
             config.fixed_frame.clone(),
@@ -62,13 +63,21 @@ impl<B: Backend> App<B> {
             viewport,
             config.teleop,
         ));
+        //let topic_manager = Box::new(app_modes::topic_managment::TopicManager::new(config));
         let image_view = Box::new(app_modes::image_view::ImageView::new(config.image_topics));
         App {
             mode: 1,
             show_help: false,
             keymap: config.key_mapping,
             app_modes: vec![send_pose, teleop, image_view],
+            current_config: x_config.clone(),
         }
+    }
+    pub fn reset(&mut self,) {
+        for app in self.app_modes.iter_mut() {
+            app.reset(self.current_config.clone());
+        }
+
     }
 
     pub fn init_terminal(
@@ -123,9 +132,9 @@ impl<B: Backend> App<B> {
             },
         }
         if new_mode != 100 && new_mode != self.mode && new_mode <= self.app_modes.len() {
-            self.app_modes[self.mode - 1].reset();
+            self.app_modes[self.mode - 1].reset(self.current_config.clone());
             self.mode = new_mode;
-            self.app_modes[self.mode - 1].reset();
+            self.app_modes[self.mode - 1].reset(self.current_config.clone());
             return;
         }
         if self.show_help {
@@ -134,7 +143,7 @@ impl<B: Backend> App<B> {
         self.app_modes[self.mode - 1].handle_input(input);
     }
 
-    pub fn show_help_XX(&self, f: &mut Frame<B>)
+    pub fn show_help(&self, f: &mut Frame<B>)
     where
         B: Backend,
     {
@@ -232,75 +241,4 @@ impl<B: Backend> App<B> {
         f.render_widget(key_bindings, areas[2]);
     }
 
-    pub fn show_help(&self, f: &mut Frame<B>)
-    where
-        B: Backend,
-    {
-        let mut topics: Vec<[String; 2]> = rosrust::topics()
-            .unwrap()
-            .iter()
-            .map(|topic|{
-                [topic.name.to_string(),
-                 topic.datatype.to_string()
-                ]
-            }).collect();
-        // Text
-        let title_text = vec![Spans::from(Span::styled(
-            "TermViz - ".to_string() + &self.app_modes[self.mode - 1].get_name(),
-            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
-        ))];
-
-        // Define areas from text
-        let areas = Layout::default()
-            .direction(Direction::Vertical)
-            .horizontal_margin(20)
-            .constraints(
-                [
-                    Constraint::Length(3), // Title + 2 borders
-                    Constraint::Length(
-                        u16::try_from(self.app_modes[self.mode - 1].get_description().len() + 2)
-                            .unwrap(),
-                    ), // Text + 2 borders
-                    Constraint::Min(u16::try_from(3).unwrap()), // Table + header + space
-                ]
-                .as_ref(),
-            )
-            .split(f.size());
-
-        // Conversion into tui stuff
-        let key_bindings_rows = topics.into_iter().map(|x| Row::new(x));
-
-        let explanation_spans: std::vec::Vec<tui::text::Spans> = self.app_modes[self.mode - 1]
-            .get_description()
-            .into_iter()
-            .map(|x| Spans::from(Span::raw(x)))
-            .collect();
-
-        // Widget creation
-        let title = Paragraph::new(title_text)
-            .block(Block::default().borders(Borders::ALL))
-            .style(Style::default().fg(Color::White))
-            .alignment(Alignment::Center)
-            .wrap(Wrap { trim: false });
-
-        let explanation = Paragraph::new(explanation_spans)
-            .block(Block::default().borders(Borders::ALL))
-            .style(Style::default().fg(Color::White))
-            .alignment(Alignment::Center)
-            .wrap(Wrap { trim: false });
-
-        let key_bindings = Table::new(IntoIterator::into_iter(key_bindings_rows))
-            .block(
-                Block::default()
-                    .title(" Key binding ")
-                    .borders(Borders::ALL),
-            )
-            .header(Row::new(vec!["Key", "Function"]).style(Style::default().fg(Color::Yellow)))
-            .widths(&[Constraint::Min(9), Constraint::Percentage(100)])
-            .style(Style::default().fg(Color::White))
-            .column_spacing(10);
-        f.render_widget(title, areas[0]);
-        f.render_widget(explanation, areas[1]);
-        f.render_widget(key_bindings, areas[2]);
-    }
 }

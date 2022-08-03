@@ -4,9 +4,12 @@ pub mod image_view;
 pub mod send_pose;
 pub mod teleoperate;
 pub mod viewport;
+pub mod topic_managment;
 
 use tui::backend::Backend;
 use tui::Frame;
+
+use crate::config::TermvizConfig;
 
 pub mod input {
     //! A module that contains the input actions that can be mapped to keys.
@@ -42,7 +45,7 @@ pub trait AppMode {
     fn run(&mut self);
 
     /// Runs when the mode is reset (e.g., if switching from another mode).
-    fn reset(&mut self);
+    fn reset(&mut self, new_config: TermvizConfig);
 
     /// Handles the received input.
     ///

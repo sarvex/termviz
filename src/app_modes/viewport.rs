@@ -2,6 +2,7 @@
 //! A mode can borrow the viewport to draw whatever is needed.
 
 use crate::app_modes::{input, AppMode, Drawable};
+use crate::config::TermvizConfig;
 use crate::footprint::get_current_footprint;
 use crate::listeners::Listeners;
 use crate::transformation;
@@ -127,7 +128,7 @@ impl Viewport {
 
 impl AppMode for Viewport {
     fn run(&mut self) {}
-    fn reset(&mut self) {}
+    fn reset(&mut self, new_config: TermvizConfig) {}
     fn handle_input(&mut self, input: &String) {
         match input.as_str() {
             input::ZOOM_IN => self.zoom += self.zoom_factor,

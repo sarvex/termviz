@@ -2,7 +2,7 @@
 
 use self::image::ImageListener;
 use crate::app_modes::{input, AppMode, BaseMode, Drawable};
-use crate::config::ImageListenerConfig;
+use crate::config::{ImageListenerConfig, TermvizConfig};
 use crate::image;
 use tui::backend::Backend;
 use tui::layout::{Alignment, Constraint, Layout};
@@ -37,7 +37,7 @@ impl AppMode for ImageView {
         }
     }
 
-    fn reset(&mut self) {
+    fn reset(&mut self, new_config: TermvizConfig) {
         for sub in self.images.iter_mut() {
             if sub.is_active() {
                 sub.deactivate();

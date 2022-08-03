@@ -1,6 +1,6 @@
 use crate::app_modes::viewport::{UseViewport, Viewport};
 use crate::app_modes::{input, AppMode, BaseMode};
-use crate::config::TeleopConfig;
+use crate::config::{TeleopConfig, TermvizConfig};
 use rosrust;
 use rosrust_msg;
 use std::cell::RefCell;
@@ -38,8 +38,16 @@ impl Teleoperate {
             increment_step: config.increment_step,
         }
     }
-}
 
+    fn stop (&mut self) {
+        self.current_velocities = Velocities {
+            x: 0.,
+            y: 0.,
+            theta: 0.,
+        };
+        self.run(); // Send 0 velocities just in case
+    }
+}
 impl<B: Backend> BaseMode<B> for Teleoperate {}
 
 impl AppMode for Teleoperate {
@@ -58,9 +66,10 @@ impl AppMode for Teleoperate {
                     .increment_step
                     .max(self.increment - self.increment_step)
             }
-            _ => self.reset(),
+            _ => self.stop(),
         }
     }
+
 
     fn run(&mut self) {
         let mut vel_cmd = rosrust_msg::geometry_msgs::Twist::default();
@@ -70,13 +79,11 @@ impl AppMode for Teleoperate {
         self.cmd_vel_pub.send(vel_cmd).unwrap();
     }
 
-    fn reset(&mut self) {
-        self.current_velocities = Velocities {
-            x: 0.,
-            y: 0.,
-            theta: 0.,
-        };
-        self.run(); // Send 0 velocities just in case
+    fn reset(&mut self, new_config: TermvizConfig) {
+        self.stop();
+        let cmd_vel_publisher = rosrust::publish(&new_config.teleop.cmd_vel_topic, 1).unwrap();
+        self.cmd_vel_pub = cmd_vel_publisher;
+
     }
 
     fn get_name(&self) -> String {
