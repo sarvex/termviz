@@ -6,43 +6,83 @@ use crate::config::TermvizConfig;
 use tui::style::{Color, Modifier, Style};
 use tui::text::{Span, Spans};
 use tui::Frame;
-use tui::widgets::{Block, Borders, Paragraph, Row, Table, Wrap};
+use tui::widgets::{Block, Borders, Paragraph, Row, ListState, Wrap, ListItem, List};
+
+
+#[derive(Clone)]
+struct SelectableTopics {
+    // `items` is the state managed by your application.
+    items: Vec<[String; 2]>,
+    // `state` is the state that can be modified by the UI. It stores the index of the selected
+    // item as well as the offset computed during the previous draw call (used to implement
+    // natural scrolling).
+    state: ListState,
+}
+
+impl SelectableTopics {
+    fn new(items: Vec<[String; 2]>) -> SelectableTopics {
+        SelectableTopics {
+            items,
+            state: ListState::default(),
+        }
+    }
+
+
+    pub fn set_items(&mut self, items: Vec<[String; 2]>) {
+        self.items = items;
+        // We reset the state as the associated items have changed. This effectively reset
+        // the selection as well as the stored offset.
+        self.state = ListState::default();
+    }
+
+    // Select the next item. This will not be reflected until the widget is drawn in the
+    // `Terminal::draw` callback using `Frame::render_stateful_widget`.
+    pub fn next(&mut self) {
+        let i = match self.state.selected() {
+            Some(i) => {
+                if i >= self.items.len() - 1 {
+                    0
+                } else {
+                    i + 1
+                }
+            }
+            None => 0,
+        };
+        self.state.select(Some(i));
+    }
+
+    // Select the previous item. This will not be reflected until the widget is drawn in the
+    // `Terminal::draw` callback using `Frame::render_stateful_widget`.
+    pub fn previous(&mut self) {
+        let i = match self.state.selected() {
+            Some(i) => {
+                if i == 0 {
+                    self.items.len() - 1
+                } else {
+                    i - 1
+                }
+            }
+            None => 0,
+        };
+        self.state.select(Some(i));
+    }
+
+    // Unselect the currently selected item if any. The implementation of `ListState` makes
+    // sure that the stored offset is also reset.
+    pub fn unselect(&mut self) {
+        self.state.select(None);
+    }
+}
 
 pub struct TopicManager {
-    map_config: Vec<MapListenerConfig>,
-    laser_topics: Vec<ListenerConfigColor>, 
-    marker_array_topics: Vec<ListenerConfig>,
-    marker_topics: Vec<ListenerConfig>,
-    image_topics: Vec<ImageListenerConfig>, 
-    pose_stamped_topics: Vec<PoseListenerConfig>,
-    pose_array_topics: Vec<PoseListenerConfig>,
-    path_topics: Vec<PoseListenerConfig>,
-    
-    availible_topics: Vec<[String; 2]>,
+    availible_topics: SelectableTopics
 }
 
 /// Represents the image view mode.
 impl TopicManager {
-    pub fn new(config: TermvizConfig) ->  TopicManager
+    pub fn new() ->  TopicManager
     {
-        TopicManager {
-            map_config: config.map_topics,
-            laser_topics: config.laser_topics,
-            marker_array_topics: config.marker_array_topics,
-            marker_topics: config.marker_topics,
-            image_topics: config.image_topics,
-            pose_stamped_topics: config.pose_stamped_topics,
-            pose_array_topics: config.pose_array_topics,
-            path_topics: config.path_topics,
-
-            availible_topics: Vec::new(),
-        }
-    }
-}
-impl<B: Backend> BaseMode<B> for TopicManager {}
-impl AppMode for TopicManager {
-    fn run(&mut self) {
-        self.availible_topics = rosrust::topics()
+        let availible_topics = rosrust::topics()
             .unwrap()
             .iter()
             .map(|topic|{
@@ -50,6 +90,22 @@ impl AppMode for TopicManager {
                  topic.datatype.to_string()
                 ]
             }).collect();
+        TopicManager {
+            availible_topics: SelectableTopics::new(availible_topics),
+        }
+    }
+}
+impl<B: Backend> BaseMode<B> for TopicManager {}
+impl AppMode for TopicManager {
+    fn run(&mut self) {
+    //     self.availible_topics = rosrust::topics()
+    //         .unwrap()
+    //         .iter()
+    //         .map(|topic|{
+    //             [topic.name.to_string(),
+    //              topic.datatype.to_string()
+    //             ]
+    //         }).collect();
     }
 
     fn reset(&mut self, new_config: TermvizConfig) {
@@ -61,13 +117,22 @@ impl AppMode for TopicManager {
     }
 
     fn handle_input(&mut self, input: &String) {
+        match input.as_str() {
+            input::UP => self.availible_topics.next(),
+            input::DOWN => self.availible_topics.previous(),
+            _ => (),
+        }
     }
 
     fn get_keymap(&self) -> Vec<[String; 2]> {
         vec![
             [
-                input::LEFT.to_string(),
-                "Switches to the previous image.".to_string(),
+                input::UP.to_string(),
+                "Shifts the pose estimate positively along the x axis.".to_string(),
+            ],
+            [
+                input::DOWN.to_string(),
+                "Shifts the pose estimate negatively along the x axis.".to_string(),
             ],
         ]
     }
@@ -98,27 +163,21 @@ impl<B: Backend> Drawable<B> for TopicManager {
             )
             .split(f.size());
 
-        // Conversion into tui stuff
-        let key_bindings_rows = self.availible_topics.clone().into_iter().map(|x| Row::new(x));
-
         // Widget creation
         let title = Paragraph::new(title_text)
             .block(Block::default().borders(Borders::ALL))
             .style(Style::default().fg(Color::White))
             .alignment(Alignment::Center)
             .wrap(Wrap { trim: false });
+        // Conversion into tui stuff
 
-        let key_bindings = Table::new(IntoIterator::into_iter(key_bindings_rows))
-            .block(
-                Block::default()
-                    .title(" Key binding ")
-                    .borders(Borders::ALL),
-            )
-            .header(Row::new(vec!["Key", "Function"]).style(Style::default().fg(Color::Yellow)))
-            .widths(&[Constraint::Min(9), Constraint::Percentage(100)])
-            .style(Style::default().fg(Color::White))
-            .column_spacing(10);
-        f.render_widget(title, areas[0]);
-        f.render_widget(key_bindings, areas[2]);
+        let items: Vec<ListItem>= self.availible_topics.items.iter().map(|i| ListItem::new(i[0].as_ref())).collect();
+        // The `List` widget is then built with those items.
+        let list = List::new(items)
+            .highlight_style(Style::default().add_modifier(Modifier::BOLD))
+            .highlight_symbol(">>");;
+        // Finally the widget is rendered using the associated state. `events.state` is
+        // effectively the only thing that we will "remember" from this draw call.
+        f.render_stateful_widget(list, f.size(), &mut self.availible_topics.state.clone());
     }
 }

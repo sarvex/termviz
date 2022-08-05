@@ -27,6 +27,7 @@ pub struct App<B: Backend> {
     keymap: HashMap<String, String>,
     app_modes: Vec<Box<dyn app_modes::BaseMode<B>>>,
     current_config: TermvizConfig,
+    reset_requested: bool,
 }
 
 impl<B: Backend> App<B> {
@@ -63,14 +64,15 @@ impl<B: Backend> App<B> {
             viewport,
             config.teleop,
         ));
-        //let topic_manager = Box::new(app_modes::topic_managment::TopicManager::new(config));
+        let topic_manager = Box::new(app_modes::topic_managment::TopicManager::new());
         let image_view = Box::new(app_modes::image_view::ImageView::new(config.image_topics));
         App {
             mode: 1,
             show_help: false,
             keymap: config.key_mapping,
-            app_modes: vec![send_pose, teleop, image_view],
+            app_modes: vec![send_pose, teleop, image_view, topic_manager],
             current_config: x_config.clone(),
+            reset_requested: false,
         }
     }
     pub fn reset(&mut self,) {
@@ -94,6 +96,9 @@ impl<B: Backend> App<B> {
 
     pub fn run(&mut self) {
         self.app_modes[self.mode - 1].run();
+        if self.reset_requested{
+            self.reset();
+        };
     }
 
     pub fn draw(&self, f: &mut Frame<B>) {
