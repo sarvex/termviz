@@ -1,7 +1,7 @@
 //! Send pose mode allows to send a pose on the given topic.
 
 use crate::app_modes::viewport::{UseViewport, Viewport};
-use crate::app_modes::{input, AppMode, BaseMode};
+use crate::app_modes::{input, AppMode, BaseMode, ExitCode};
 use crate::config::TermvizConfig;
 use crate::footprint::get_current_footprint;
 use crate::transformation;
@@ -82,7 +82,7 @@ impl SendPose {
 impl<B: Backend> BaseMode<B> for SendPose {}
 
 impl AppMode for SendPose {
-    fn run(&mut self) {
+    fn run(&mut self) -> ExitCode{
         let base_link_pose = self
             .viewport
             .borrow()
@@ -98,6 +98,7 @@ impl AppMode for SendPose {
         if !self.ghost_active {
             self.new_pose = self.robot_pose.clone();
         }
+        return ExitCode::Noop;
     }
     fn reset(&mut self, new_config: TermvizConfig) {
         self._reset()

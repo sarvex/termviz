@@ -1,7 +1,7 @@
 //! Image view mode allows to visualize images from the given topics.
 
 use self::image::ImageListener;
-use crate::app_modes::{input, AppMode, BaseMode, Drawable};
+use crate::app_modes::{input, AppMode, BaseMode, Drawable, ExitCode};
 use crate::config::{ImageListenerConfig, TermvizConfig};
 use crate::image;
 use tui::backend::Backend;
@@ -31,10 +31,11 @@ impl ImageView {
 }
 
 impl AppMode for ImageView {
-    fn run(&mut self) {
+    fn run(&mut self) -> ExitCode{
         if self.images.len() > 0 && !self.images[self.active_sub].is_active() {
             self.images[self.active_sub].activate();
         }
+        return ExitCode::Noop;
     }
 
     fn reset(&mut self, new_config: TermvizConfig) {

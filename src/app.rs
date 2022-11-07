@@ -8,6 +8,7 @@ use std::convert::TryFrom;
 use std::io;
 use std::rc::Rc;
 use std::sync::Arc;
+use std::sync::RwLock;
 use termion::input::MouseTerminal;
 use termion::raw::IntoRawMode;
 use termion::raw::RawTerminal;
@@ -33,6 +34,7 @@ pub struct App<B: Backend> {
 impl<B: Backend> App<B> {
     pub fn new(tf_listener: Arc<rustros_tf::TfListener>, x_config: TermvizConfig) -> App<B> {
         let config = x_config.clone();
+        let shared_config = Arc::new(RwLock::new(config.clone()));
         let listeners = Listeners::new(
             tf_listener.clone(),
             config.fixed_frame.clone(),
@@ -64,7 +66,7 @@ impl<B: Backend> App<B> {
             viewport,
             config.teleop,
         ));
-        let topic_manager = Box::new(app_modes::topic_managment::TopicManager::new(x_config.clone()));
+        let topic_manager = Box::new(app_modes::topic_managment::TopicManager::new(shared_config));
         let image_view = Box::new(app_modes::image_view::ImageView::new(config.image_topics));
         App {
             mode: 1,

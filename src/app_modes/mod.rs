@@ -39,10 +39,14 @@ pub mod input {
     pub const UNMAPPED: &str = "Any other";
 }
 
+pub enum ExitCode {
+    Noop = 0,
+    Reset = 1,
+}
 /// Represents all the basic methods that an app mode must implement.
 pub trait AppMode {
     /// Runs at each tick.
-    fn run(&mut self);
+    fn run(&mut self) -> ExitCode;
 
     /// Runs when the mode is reset (e.g., if switching from another mode).
     fn reset(&mut self, new_config: TermvizConfig);

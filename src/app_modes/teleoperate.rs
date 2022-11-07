@@ -1,5 +1,5 @@
 use crate::app_modes::viewport::{UseViewport, Viewport};
-use crate::app_modes::{input, AppMode, BaseMode};
+use crate::app_modes::{input, AppMode, BaseMode, ExitCode};
 use crate::config::{TeleopConfig, TermvizConfig};
 use rosrust;
 use rosrust_msg;
@@ -71,12 +71,13 @@ impl AppMode for Teleoperate {
     }
 
 
-    fn run(&mut self) {
+    fn run(&mut self) -> ExitCode{
         let mut vel_cmd = rosrust_msg::geometry_msgs::Twist::default();
         vel_cmd.linear.x = self.current_velocities.x;
         vel_cmd.linear.y = self.current_velocities.y;
         vel_cmd.angular.z = self.current_velocities.theta;
         self.cmd_vel_pub.send(vel_cmd).unwrap();
+        return ExitCode::Noop;
     }
 
     fn reset(&mut self, new_config: TermvizConfig) {

@@ -1,7 +1,7 @@
 //! A viewport is where markers, maps and other information are shown.
 //! A mode can borrow the viewport to draw whatever is needed.
 
-use crate::app_modes::{input, AppMode, Drawable};
+use crate::app_modes::{input, AppMode, Drawable, ExitCode};
 use crate::config::TermvizConfig;
 use crate::footprint::get_current_footprint;
 use crate::listeners::Listeners;
@@ -127,7 +127,9 @@ impl Viewport {
 }
 
 impl AppMode for Viewport {
-    fn run(&mut self) {}
+    fn run(&mut self) -> ExitCode{
+        return ExitCode::Noop;
+    }
     fn reset(&mut self, new_config: TermvizConfig) {}
     fn handle_input(&mut self, input: &String) {
         match input.as_str() {

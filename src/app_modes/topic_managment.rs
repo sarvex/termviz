@@ -1,7 +1,8 @@
-use std::sync::Arc;
+use std::sync::{Arc, RwLock, atomic};
 
 use crate::config::{ImageListenerConfig, ListenerConfigColor, PoseListenerConfig, ListenerConfig, MapListenerConfig};
-use crate::app_modes::{input, AppMode, BaseMode, Drawable};
+use crate::config::Color as ConfigColor;
+use crate::app_modes::{input, AppMode, BaseMode, Drawable, ExitCode};
 use tui::backend::Backend;
 use tui::layout::{Alignment, Constraint, Direction, Layout};
 use crate::config::TermvizConfig;
@@ -97,14 +98,16 @@ impl SelectableTopics {
 pub struct TopicManager {
     availible_topics: SelectableTopics,
     selected_topics: SelectableTopics,
-    config: TermvizConfig,
+    shared_config: Arc<RwLock<TermvizConfig>>,
     selection_mode: bool,
+    reset_requested: Arc<atomic::AtomicBool>,
 }
 
 /// Represents the image view mode.
 impl TopicManager {
-    pub fn new(config: TermvizConfig) ->  TopicManager
+    pub fn new(shared_config: Arc<RwLock<TermvizConfig>>) ->  TopicManager
     {
+        let config = shared_config.read().unwrap().clone();
         let availible_topics: Vec<[String; 2]>= rosrust::topics()
             .unwrap()
             .iter()
@@ -121,8 +124,6 @@ impl TopicManager {
                 supported_topics.push(topic.clone());
 
             }
-
-
         }
 
         let all_active_topics: Vec<[String; 2]>= vec![
@@ -137,8 +138,9 @@ impl TopicManager {
         TopicManager {
             availible_topics: SelectableTopics::new(supported_topics),
             selected_topics: SelectableTopics::new(all_active_topics),
-            config: config,
+            shared_config: shared_config,
             selection_mode: true,
+            reset_requested: Arc::new(atomic::AtomicBool::new(false))
         }
     }
 
@@ -152,11 +154,17 @@ impl TopicManager {
     }
 
     pub fn save(&mut self) {
-        // for topic in self.selected_topics.items.into_iter() {
-        //     match topic[1] {
-        //         &"sensor_msgs/LaserScan" => self.config.laser_topics
-        //     }
-        // }
+        for topic in self.selected_topics.items.iter() {
+            match topic[1].clone().as_ref() {
+                "sensor_msgs/LaserScan" => self.shared_config.clone().write().unwrap().laser_topics.push(
+                    ListenerConfigColor{
+                        topic: topic[0].clone(),
+                        color: ConfigColor{r:255, g:255, b:255},
+                    }),
+                _ => (),
+            }
+        }
+        self.reset_requested.store(false, atomic::Ordering::Relaxed)
     }
 
 }
@@ -164,7 +172,11 @@ impl TopicManager {
 impl<B: Backend> BaseMode<B> for TopicManager {}
 
 impl AppMode for TopicManager {
-    fn run(&mut self) {
+    fn run(&mut self) -> ExitCode{
+        if self.reset_requested.swap(false, atomic::Ordering::Relaxed) {
+            return ExitCode::Reset;
+        }
+        return ExitCode::Noop;
     }
 
     fn reset(&mut self, new_config: TermvizConfig) {
@@ -182,6 +194,7 @@ impl AppMode for TopicManager {
                 input::DOWN => self.availible_topics.next(),
                 input::RIGHT => self.shift_active_element_right(),
                 input::ROTATE_RIGHT => self.selection_mode = false,
+                input::CONFIRM => self.save(),
                 _ => (),
             }
         }
@@ -191,6 +204,7 @@ impl AppMode for TopicManager {
                 input::DOWN => self.selected_topics.next(),
                 input::LEFT => self.shift_active_element_left(),
                 input::ROTATE_LEFT => self.selection_mode = true,
+                input::CONFIRM => self.save(),
                 _ => (),
             }
         }
