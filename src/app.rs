@@ -1,4 +1,5 @@
 use crate::app_modes;
+use crate::app_modes::ExitCode;
 use crate::config::TermvizConfig;
 use crate::footprint::get_footprint;
 use crate::listeners::Listeners;
@@ -27,8 +28,9 @@ pub struct App<B: Backend> {
     show_help: bool,
     keymap: HashMap<String, String>,
     app_modes: Vec<Box<dyn app_modes::BaseMode<B>>>,
-    current_config: TermvizConfig,
+    current_config: Arc<RwLock<TermvizConfig>>,
     reset_requested: bool,
+    tf_listener: Arc<rustros_tf::TfListener>
 }
 
 impl<B: Backend> App<B> {
@@ -50,7 +52,7 @@ impl<B: Backend> App<B> {
         let viewport = Rc::new(RefCell::new(app_modes::viewport::Viewport::new(
             &config.fixed_frame,
             &config.robot_frame,
-            tf_listener,
+            tf_listener.clone(),
             &config.visible_area,
             &get_footprint(),
             config.axis_length,
@@ -66,21 +68,59 @@ impl<B: Backend> App<B> {
             viewport,
             config.teleop,
         ));
-        let topic_manager = Box::new(app_modes::topic_managment::TopicManager::new(shared_config));
+        let topic_manager = Box::new(app_modes::topic_managment::TopicManager::new(shared_config.clone()));
         let image_view = Box::new(app_modes::image_view::ImageView::new(config.image_topics));
         App {
             mode: 1,
             show_help: false,
             keymap: config.key_mapping,
             app_modes: vec![send_pose, teleop, image_view, topic_manager],
-            current_config: x_config.clone(),
+            current_config: shared_config.clone(),
             reset_requested: false,
+            tf_listener: tf_listener.clone(),
         }
     }
+
     pub fn reset(&mut self,) {
         for app in self.app_modes.iter_mut() {
-            app.reset(self.current_config.clone());
+            drop(app);
         }
+        let config = self.current_config.clone().read().unwrap().clone();
+
+        let listeners = Listeners::new(
+            self.tf_listener.clone(),
+            config.fixed_frame.clone(),
+            config.laser_topics,
+            config.marker_topics,
+            config.marker_array_topics,
+            config.map_topics,
+            config.pose_stamped_topics,
+            config.pose_array_topics,
+            config.pointcloud2_topics,
+            config.path_topics,
+        );
+        let viewport = Rc::new(RefCell::new(app_modes::viewport::Viewport::new(
+            &config.fixed_frame,
+            &config.robot_frame,
+            self.tf_listener.clone(),
+            &config.visible_area,
+            &get_footprint(),
+            config.axis_length,
+            config.zoom_factor,
+            listeners,
+            terminal_size().unwrap(),
+        )));
+        let send_pose = Box::new(app_modes::send_pose::SendPose::new(
+            &config.send_pose_topic,
+            viewport.clone(),
+        ));
+        let teleop = Box::new(app_modes::teleoperate::Teleoperate::new(
+            viewport,
+            config.teleop,
+        ));
+        let topic_manager = Box::new(app_modes::topic_managment::TopicManager::new(self.current_config.clone()));
+        let image_view = Box::new(app_modes::image_view::ImageView::new(config.image_topics));
+        self.app_modes = vec![send_pose, teleop, image_view, topic_manager]
 
     }
 
@@ -97,9 +137,10 @@ impl<B: Backend> App<B> {
     }
 
     pub fn run(&mut self) {
-        self.app_modes[self.mode - 1].run();
-        if self.reset_requested{
-            self.reset();
+        let status = self.app_modes[self.mode - 1].run();
+        match status {
+            ExitCode::Reset => self.reset(),
+            _ => (),
         };
     }
 
@@ -139,9 +180,9 @@ impl<B: Backend> App<B> {
             },
         }
         if new_mode != 100 && new_mode != self.mode && new_mode <= self.app_modes.len() {
-            self.app_modes[self.mode - 1].reset(self.current_config.clone());
+            self.app_modes[self.mode - 1].reset(self.current_config.clone().read().unwrap().clone());
             self.mode = new_mode;
-            self.app_modes[self.mode - 1].reset(self.current_config.clone());
+            self.app_modes[self.mode - 1].reset(self.current_config.clone().read().unwrap().clone());
             return;
         }
         if self.show_help {

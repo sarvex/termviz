@@ -1,6 +1,6 @@
 use std::sync::{Arc, RwLock, atomic};
 
-use crate::config::{ImageListenerConfig, ListenerConfigColor, PoseListenerConfig, ListenerConfig, MapListenerConfig};
+use crate::config::{ListenerConfigColor, PoseListenerConfig, ListenerConfig};
 use crate::config::Color as ConfigColor;
 use crate::app_modes::{input, AppMode, BaseMode, Drawable, ExitCode};
 use tui::backend::Backend;
@@ -10,6 +10,7 @@ use tui::style::{Color, Modifier, Style};
 use tui::text::{Span, Spans};
 use tui::Frame;
 use tui::widgets::{Block, Borders, Paragraph, ListState, Wrap, ListItem, List};
+use rand::Rng;
 
 
 #[derive(Clone)]
@@ -60,7 +61,7 @@ impl SelectableTopics {
         let i = match self.state.selected() {
             Some(i) => {
                 if i == 0 {
-                    self.items.len() - 1
+                    self.items.len()
                 } else {
                     i - 1
                 }
@@ -84,9 +85,9 @@ impl SelectableTopics {
         let i = match self.state.selected() {
             Some(i) => {
                 if i == 0 {
-                    self.items.len() - 1
+                    self.items.len()
                 } else {
-                    i - 1
+                    i
                 }
             }
             None => 0,
@@ -117,23 +118,47 @@ impl TopicManager {
                 ]
             }).collect();
 
-        let mut supported_topics: Vec<[String; 2]> = Vec::new();
-
-        for topic in availible_topics.into_iter() {
-            if topic[0].to_string() != "sensor_msgs/Laserscan"{
-                supported_topics.push(topic.clone());
-
-            }
-        }
-
-        let all_active_topics: Vec<[String; 2]>= vec![
-            [config.laser_topics.iter().map(|i| i.topic.clone()).collect(), "sensor_msgs/LaserScan".to_string()],
-            [config.marker_array_topics.iter().map(|i| i.topic.clone()).collect(), "visualization_msgs/MarkerArray".to_string()],
-            [config.marker_topics.iter().map(|i| i.topic.clone()).collect(), "visualization_msgs/Marker".to_string()],
-            [config.pose_stamped_topics.iter().map(|i| i.topic.clone()).collect(), "geometry_msgs/PoseStamped".to_string()],
-            [config.pose_array_topics.iter().map(|i| i.topic.clone()).collect(), "geometry_msgs/PoseArray".to_string()],
-            [config.path_topics.iter().map(|i| i.topic.clone()).collect(), "nav_msgs/Path".to_string()],
+        let supported_topic_types = vec![
+            "sensor_msgs/LaserScan".to_string(),
+            "visualization_msgs/MarkerArray".to_string(),
+            "visualization_msgs/Marker".to_string(),
+            "geometry_msgs/PoseStamped".to_string(),
+            "geometry_msgs/PoseArray".to_string(),
+            "nav_msgs/Path".to_string(),
         ];
+        let supported_topics = availible_topics
+            .into_iter()
+            .filter(|el| supported_topic_types.contains(&el[1].to_string()))
+            .clone()
+            .collect();
+
+        let active_laser_topics: Vec<[String; 2]> = config.laser_topics.iter().map(
+            |i| {[i.topic.clone(),  "sensor_msgs/LaserScan".to_string()]}
+        ).collect();
+        let active_marker_array_topics: Vec<[String; 2]> = config.marker_array_topics.iter().map(
+            |i| {[i.topic.clone(),  "visualization_msgs/MarkerArray".to_string()]}
+        ).collect();
+        let active_marker_topics: Vec<[String; 2]> = config.map_topics.iter().map(
+            |i| {[i.topic.clone(),  "visualization_msgs/Marker".to_string()]}
+        ).collect();
+        let active_pose_stamped_topics: Vec<[String; 2]> = config.pose_stamped_topics.iter().map(
+            |i| {[i.topic.clone(),  "geometry_msgs/PoseStamped".to_string()]}
+        ).collect();
+        let active_pose_array_topics: Vec<[String; 2]> = config.pose_array_topics.iter().map(
+            |i| {[i.topic.clone(),  "geometry_msgs/PoseArray".to_string()]}
+        ).collect();
+        let active_path_topics: Vec<[String; 2]> = config.path_topics.iter().map(
+            |i| {[i.topic.clone(),  "nav_msgs/Path".to_string()]}
+        ).collect();
+
+        let all_active_topics = [
+            active_laser_topics,
+            active_marker_array_topics,
+            active_marker_topics,
+            active_pose_stamped_topics,
+            active_pose_array_topics,
+            active_path_topics
+        ].concat();
 
         TopicManager {
             availible_topics: SelectableTopics::new(supported_topics),
@@ -154,17 +179,66 @@ impl TopicManager {
     }
 
     pub fn save(&mut self) {
+
+        let mut config = self.shared_config.read().unwrap().clone();
+
+
+        // Flush all and fill later
+        config.laser_topics.clear();
+        config.marker_array_topics.clear();
+        config.marker_topics.clear();
+        config.pose_stamped_topics.clear();
+        config.pose_array_topics.clear();
+        config.path_topics.clear();
+
+        let mut rng = rand::thread_rng();
         for topic in self.selected_topics.items.iter() {
             match topic[1].clone().as_ref() {
-                "sensor_msgs/LaserScan" => self.shared_config.clone().write().unwrap().laser_topics.push(
+                "sensor_msgs/LaserScan" => config.laser_topics.push(
                     ListenerConfigColor{
                         topic: topic[0].clone(),
-                        color: ConfigColor{r:255, g:255, b:255},
-                    }),
+                        color: ConfigColor{r:rng.gen_range(0, 255), g:rng.gen_range(0, 255), b:rng.gen_range(0, 255)},
+                    }
+                ),
+                "visualization_msgs/MarkerArray" => config.marker_array_topics.push(
+                    ListenerConfig {
+                        topic: topic[0].clone(),
+                    }
+                ),
+                "visualization_msgs/Marker" => config.marker_topics.push(
+                    ListenerConfig {
+                        topic: topic[0].clone(),
+                    }
+                ),
+                "geometry_msgs/PoseStamped" => config.pose_stamped_topics.push(
+                    PoseListenerConfig{
+                        topic: topic[0].clone(),
+                        color: ConfigColor{r:rng.gen_range(0, 255), g:rng.gen_range(0, 255), b:rng.gen_range(0, 255)},
+                        length: 0.2,
+                        style: "axis".to_string(),
+                    }
+                ),
+                "geometry_msgs/PoseArray" => config.pose_array_topics.push(
+                    PoseListenerConfig{
+                        topic: topic[0].clone(),
+                        color: ConfigColor{r:rng.gen_range(0, 255), g:rng.gen_range(0, 255), b:rng.gen_range(0, 255)},
+                        length: 0.2,
+                        style: "axis".to_string(),
+                    }
+                ),
+                "nav_msgs/Path" => config.path_topics.push(
+                    PoseListenerConfig{
+                        topic: topic[0].clone(),
+                        color: ConfigColor{r:rng.gen_range(0, 255), g:rng.gen_range(0, 255), b:rng.gen_range(0, 255)},
+                        length: 0.2,
+                        style: "axis".to_string(),
+                    }
+                ),
                 _ => (),
             }
         }
-        self.reset_requested.store(false, atomic::Ordering::Relaxed)
+
+        let _ = confy::store("termviz", "termviz", &(config));
     }
 
 }
@@ -173,9 +247,9 @@ impl<B: Backend> BaseMode<B> for TopicManager {}
 
 impl AppMode for TopicManager {
     fn run(&mut self) -> ExitCode{
-        if self.reset_requested.swap(false, atomic::Ordering::Relaxed) {
-            return ExitCode::Reset;
-        }
+        // if self.reset_requested.swap(false, atomic::Ordering::Relaxed) {
+        //     return ExitCode::Reset;
+        // }
         return ExitCode::Noop;
     }
 
@@ -260,9 +334,6 @@ impl<B: Backend> Drawable<B> for TopicManager {
                 .as_ref(),
             )
             .split(areas[2]);
-        let right_pane =
-            Block::default().title("BlockR").borders(Borders::ALL);
-
         // Widget creation
         let title = Paragraph::new(title_text)
             .block(Block::default().borders(Borders::ALL))
@@ -271,7 +342,10 @@ impl<B: Backend> Drawable<B> for TopicManager {
             .wrap(Wrap { trim: false });
         // Conversion into tui stuff
 
-        let items: Vec<ListItem>= self.availible_topics.items.iter().map(|i| ListItem::new(i[1].as_ref())).collect();
+        let items: Vec<ListItem>= self.availible_topics.items.iter().map(|i| ListItem::new(
+                format!("{} / {}", i[0], i[1])
+            )
+        ).collect();
         // The `List` widget is then built with those items.
         let list = List::new(items)
             .highlight_style(Style::default().add_modifier(Modifier::BOLD))
