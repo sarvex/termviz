@@ -197,7 +197,7 @@ impl TopicManager {
                 "sensor_msgs/LaserScan" => config.laser_topics.push(
                     ListenerConfigColor{
                         topic: topic[0].clone(),
-                        color: ConfigColor{r:rng.gen_range(0, 255), g:rng.gen_range(0, 255), b:rng.gen_range(0, 255)},
+                        color: ConfigColor{r:rng.gen_range(0..255), g:rng.gen_range(0..255), b:rng.gen_range(0..255)},
                     }
                 ),
                 "visualization_msgs/MarkerArray" => config.marker_array_topics.push(
@@ -213,7 +213,7 @@ impl TopicManager {
                 "geometry_msgs/PoseStamped" => config.pose_stamped_topics.push(
                     PoseListenerConfig{
                         topic: topic[0].clone(),
-                        color: ConfigColor{r:rng.gen_range(0, 255), g:rng.gen_range(0, 255), b:rng.gen_range(0, 255)},
+                        color: ConfigColor{r:rng.gen_range(0..255), g:rng.gen_range(0..255), b:rng.gen_range(0..255)},
                         length: 0.2,
                         style: "axis".to_string(),
                     }
@@ -221,7 +221,7 @@ impl TopicManager {
                 "geometry_msgs/PoseArray" => config.pose_array_topics.push(
                     PoseListenerConfig{
                         topic: topic[0].clone(),
-                        color: ConfigColor{r:rng.gen_range(0, 255), g:rng.gen_range(0, 255), b:rng.gen_range(0, 255)},
+                        color: ConfigColor{r:rng.gen_range(0..255), g:rng.gen_range(0..255), b:rng.gen_range(0..255)},
                         length: 0.2,
                         style: "axis".to_string(),
                     }
@@ -229,7 +229,7 @@ impl TopicManager {
                 "nav_msgs/Path" => config.path_topics.push(
                     PoseListenerConfig{
                         topic: topic[0].clone(),
-                        color: ConfigColor{r:rng.gen_range(0, 255), g:rng.gen_range(0, 255), b:rng.gen_range(0, 255)},
+                        color: ConfigColor{r:rng.gen_range(0..255), g:rng.gen_range(0..255), b:rng.gen_range(0..255)},
                         length: 0.2,
                         style: "axis".to_string(),
                     }
